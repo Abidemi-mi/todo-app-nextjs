@@ -1,16 +1,22 @@
 // // lib/api.ts
-export interface Todo {
-  id: number
-  title: string
-  completed: boolean
+export type Todo  = {
+  id: number;
+  title: string;
+  completed: boolean;
 }
 
 // ✅ Fetch todos
-export async function getTodos(page: number): Promise<Todo[]> {
-  const res = await fetch('https://jsonplaceholder.typicode.com/todos?_limit=10')
-  if (!res.ok) throw new Error('Failed to fetch todos')
-  return res.json()
-}
+// export async function getTodos(page: number): Promise<Todo[]> {
+//   const res = await fetch('https://jsonplaceholder.typicode.com/todos?_limit=10')
+//   if (!res.ok) throw new Error('Failed to fetch todos')
+//   return res.json()
+// }
+
+export const getTodoById = async (id: number): Promise<Todo> => {
+  const res = await fetch(`https://jsonplaceholder.typicode.com/todos/${id}`);
+  if (!res.ok) throw new Error("Failed to fetch todo");
+  return res.json();
+};
 
 // ✅ Add todo (simulated API call)
 export async function addTodo(newTodo: Omit<Todo, 'id'>): Promise<Todo> {
