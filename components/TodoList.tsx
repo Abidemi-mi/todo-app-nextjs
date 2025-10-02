@@ -1,93 +1,123 @@
-'use client'
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getTodos, addTodo, updateTodo, deleteTodo, Todo } from '../lib/api'
-import Link from 'next/link'
+"use client"
+import { useState } from "react"
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query"
+import { getTodos, addTodo, updateTodo, deleteTodo, Todo } from "../lib/api"
+import Link from "next/link"
 
 export default function TodoList() {
-  const [page, setPage] = useState<number>(0)
-  const [search, setSearch] = useState<string>('')
-  const [newTodo, setNewTodo] = useState<string>('')
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const [editTitle, setEditTitle] = useState<string>('')
-
   const queryClient = useQueryClient()
+  const [page, setPage] = useState(1)
+  const [newTitle, setNewTitle] = useState("")
 
   const { data: todos = [], isLoading, isError } = useQuery<Todo[]>({
-    queryKey: ['todos', page],
-    queryFn: () => getTodos(page),
-    keepPreviousData: true,
+    queryKey: ["todos", page],
+    queryFn: () => getTodos(),
+    placeholderData: keepPreviousData,
   })
 
   const addMutation = useMutation({
     mutationFn: addTodo,
-    onSuccess: (res) => {
-      // append to cache so UI updates immediately (JSONPlaceholder won't persist)
-      queryClient.setQueryData<Todo[]>(['todos', page], (old) => old ? [...old, { ...res, id: Date.now() }] : [{ ...res, id: Date.now() }])
-      setNewTodo('')
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["todos"] }),
   })
 
   const updateMutation = useMutation({
     mutationFn: updateTodo,
-    onSuccess: (res) => {
-      queryClient.setQueryData<Todo[]>(['todos', page], (old) => old ? old.map(t => t.id === res.id ? { ...t, ...res } : t) : [])
-      setEditingId(null)
-      setEditTitle('')
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["todos"] }),
   })
 
   const deleteMutation = useMutation({
     mutationFn: deleteTodo,
-    onSuccess: (_, id) => {
-      queryClient.setQueryData<Todo[]>(['todos', page], (old) => old ? old.filter(t => t.id !== id) : [])
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["todos"] }),
   })
 
-  if (isLoading) return <p className="text-center p-4">Loading...</p>
-  if (isError) return <p className="text-center p-4 text-red-500">Error fetching todos</p>
-  
-
-  const filtered = todos.filter((t: Todo) => t.title.toLowerCase().includes(search.toLowerCase()))
+  if (isLoading) return <p className="text-center text-gray-500 mt-6">Loading todos...</p>
+  if (isError) return <p className="text-center text-red-500 mt-6">Failed to load todos</p>
 
   return (
-    <div className="max-w-2xl mx-auto p-6 bg-white rounded shadow">
-      <h1 className="text-2xl font-bold mb-4 text-center">Todo List</h1>
+    <div className="max-w-3xl mx-auto px-6 py-8">
+      <h1 className="text-3xl font-bold text-center mb-8 text-indigo-600">My Todo List</h1>
 
-      <div className="flex gap-2 mb-4">
-        <input value={newTodo} onChange={e => setNewTodo(e.target.value)} placeholder="Add new todo..." className="flex-1 border p-2 rounded-l" />
-        <button onClick={() => newTodo.trim() && addMutation.mutate(newTodo.trim())} className="bg-blue-600 text-white px-4 rounded-r">Add</button>
+      {/* Add Todo */}
+      <div className="flex items-center gap-3 mb-8">
+        <input
+          type="text"
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          placeholder="Enter a new task..."
+          className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+        <button
+          onClick={() => {
+            if (newTitle.trim()) {
+              addMutation.mutate({ title: newTitle })
+              setNewTitle("")
+            }
+          }}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-5 py-2 rounded-lg shadow"
+        >
+          Add
+        </button>
       </div>
 
-      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search todos..." className="w-full border p-2 mb-4 rounded" />
-
-      <ul className="space-y-2">
-        {filtered.map((todo: Todo) => (
-          <li key={todo.id} className="flex items-center justify-between p-3 bg-gray-50 rounded">
-            <div className="flex items-center gap-3">
-              <input type="checkbox" checked={todo.completed} onChange={() => updateMutation.mutate({ ...todo, completed: !todo.completed })} />
-              {editingId === todo.id ? (
-                <input className="border p-1 rounded" value={editTitle} onChange={e => setEditTitle(e.target.value)} />
-              ) : (
-                <Link href={`/todo/${todo.id}`} className={todo.completed ? 'line-through text-gray-400' : ''}>{todo.title}</Link>
-              )}
+      {/* Todo List */}
+      <div className="grid gap-4">
+        {todos.map((todo) => (
+          <div
+            key={todo.id}
+            className="flex items-center justify-between bg-white p-4 rounded-xl shadow hover:shadow-lg transition"
+          >
+            <div>
+              <Link
+                href={`/todo/${todo.id}`}
+                className="text-lg font-medium text-gray-800 hover:text-indigo-600"
+              >
+                {todo.title}
+              </Link>
+              <p
+                className={`text-sm mt-1 ${
+                  todo.completed ? "text-green-500" : "text-orange-500"
+                }`}
+              >
+                {todo.completed ? "✅ Completed" : "⏳ Pending"}
+              </p>
             </div>
+
             <div className="flex gap-2">
-              {editingId === todo.id ? (
-                <button onClick={() => editTitle.trim() && updateMutation.mutate({ ...todo, title: editTitle.trim() })} className="bg-green-500 text-white px-3 py-1 rounded">Save</button>
-              ) : (
-                <button onClick={() => { setEditingId(todo.id); setEditTitle(todo.title) }} className="bg-yellow-500 text-white px-3 py-1 rounded">Edit</button>
-              )}
-              <button onClick={() => deleteMutation.mutate(todo.id)} className="bg-red-600 text-white px-3 py-1 rounded">Delete</button>
+              <button
+                onClick={() =>
+                  updateMutation.mutate({ ...todo, completed: !todo.completed })
+                }
+                className="px-4 py-2 text-sm rounded-lg bg-blue-500 hover:bg-blue-600 text-white"
+              >
+                {todo.completed ? "Undo" : "Done"}
+              </button>
+              <button
+                onClick={() => deleteMutation.mutate(todo.id)}
+                className="px-4 py-2 text-sm rounded-lg bg-red-500 hover:bg-red-600 text-white"
+              >
+                Delete
+              </button>
             </div>
-          </li>
+          </div>
         ))}
-      </ul>
+      </div>
 
-      <div className="flex justify-between mt-6">
-        <button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))} className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50">Prev</button>
-        <span>Page {page}</span>
-        <button onClick={() => setPage(p => p + 1)} className="px-3 py-1 bg-gray-200 rounded">Next</button>
+      {/* Pagination */}
+      <div className="flex justify-center items-center gap-4 mt-8">
+        <button
+          onClick={() => setPage((p) => Math.max(p - 1, 1))}
+          disabled={page === 1}
+          className="px-4 py-2 bg-gray-200 rounded-lg disabled:opacity-50 hover:bg-gray-300"
+        >
+          Prev
+        </button>
+        <span className="font-semibold text-gray-700">Page {page}</span>
+        <button
+          onClick={() => setPage((p) => p + 1)}
+          className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+        >
+          Next
+        </button>
       </div>
     </div>
   )
